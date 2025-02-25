@@ -82,12 +82,12 @@ The easiest way to get started is using our pre-built image from GitHub Containe
       environment:
          - TUNNEL_TOKEN=${TUNNEL_TOKEN}
 
-   dns-manager:
-      # image: ghcr.io/DanCorley/dns-manager:latest
+   tunnel-manager:
+      # image: ghcr.io/dancorley/cloudflared-tunnel-manager:latest
       build:
-         context: ./dns-manager
+         context: ./cloudflared-tunnel-manager
          dockerfile: Dockerfile
-      container_name: dns-manager
+      container_name: cloudflared-tunnel-manager
       restart: unless-stopped
       volumes:
          - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -119,9 +119,9 @@ If you prefer to build the image locally:
 
 2. Modify the `docker-compose.yml` to build locally:
    ```yaml
-   dns-manager:
+   tunnel-manager:
      build:
-       context: ./dns-manager
+       context: ./tunnel-manager
        dockerfile: Dockerfile
      # ... rest of configuration
    ```
@@ -139,7 +139,7 @@ If you prefer to build the image locally:
 .
 ├── docker-compose.yml          # Main compose file
 ├── .env                       # Environment variables
-├── dns-manager/
+├── tunnel-manager/
 │   ├── Dockerfile            # DNS manager container definition
 │   ├── requirements.txt      # Python dependencies
 │   ├── main.py              # Application entry point
