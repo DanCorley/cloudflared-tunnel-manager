@@ -29,7 +29,7 @@ Create a `.env` file with the following variables:
 ```env
 # Cloudflare configuration
 DOMAIN=your-domain.com
-HOST_IP=your.local.ip.address
+HOST_IP=your.machine.ip.address # defaults to localhost
 
 # Cloudflare API configuration
 TUNNEL_TOKEN=your-tunnel-token
