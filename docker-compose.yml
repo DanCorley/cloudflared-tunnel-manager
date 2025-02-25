@@ -1,0 +1,30 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    volumes:
+      - ./cloudflared:/etc/cloudflared
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+
+  tunnel-manager:
+    image: ghcr.io/dancorley/cloudflared-tunnel-manager:latest
+    # build:
+    #   context: ./tunnel-manager
+    #   dockerfile: Dockerfile
+    container_name: cloudflared-tunnel-manager
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./logs:/app/logs
+    environment:
+      - CF_API_TOKEN=${CF_API_TOKEN}
+      - CF_ACCOUNT_ID=${CF_ACCOUNT_ID}
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - CF_ZONE_ID=${CF_ZONE_ID}
+      - DOMAIN=${DOMAIN}
+      - HOST_IP=${HOST_IP}
+    depends_on:
+      - cloudflared
