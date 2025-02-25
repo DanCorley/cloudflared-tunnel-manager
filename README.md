@@ -70,7 +70,7 @@ The DNS manager will automatically:
 The easiest way to get started is using our pre-built image from GitHub Container Registry:
 
 1. Create a docker-compose file alongside cloudflared:
-   ```bash
+   ```yaml
    services:
    cloudflared:
       image: cloudflare/cloudflared:latest
