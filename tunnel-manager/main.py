@@ -4,19 +4,19 @@ from time import sleep
 from cloudflare_manager import CloudflareManager
 from docker_manager import DockerManager
 
-# Configure logging
+# Configure dynamic logging based on environment variable
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper()),
     format='%(asctime)s [%(levelname)s] %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger('dns-manager')
+logger = logging.getLogger('cloudflared-tunnel-manager')
 
 # Ensure logs directory exists
 os.makedirs('/app/logs', exist_ok=True)
 
 # Add file handler with rotation
-log_file = '/app/logs/dns-manager.log'
+log_file = '/app/logs/cloudflared-tunnel-manager.log'
 log_handler = logging.FileHandler(log_file)
 log_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
 logger.addHandler(log_handler)

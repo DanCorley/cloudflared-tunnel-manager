@@ -121,7 +121,7 @@ class CloudflareManager:
             )
 
             # If container is disabled, remove the ingress rule
-            if labels.get('enabled', 'true').lower() != 'true':
+            if labels.get('enabled', 'false').lower() != 'true':
                 if existing_rule:
                     config.config.ingress.remove(existing_rule)
                     logger.info(f"Removed ingress rule for {hostname}")
@@ -136,7 +136,7 @@ class CloudflareManager:
                 )
 
                 if existing_rule:
-                    # Update existing rule
+                    # Update existing rule cache
                     idx = config.config.ingress.index(existing_rule)
                     config.config.ingress[idx] = new_rule
                     logger.info(f"Updated ingress rule for {hostname}")
