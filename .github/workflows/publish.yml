@@ -1,21 +1,26 @@
 name: Publish Docker image
 
 on:
-  workflow_dispatch:
-    branches: ['main']
-    tags: ['v*']
-    inputs:
-      version:
-        description: 'Semantic Version for Image (e.g., v1.0.0)'
-        required: true
-        pattern: '^v\d+\.\d+\.\d+$'
+  release:
+    types: [published]
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check tag format
+        run: |
+          if [[ ! ${{ github.event.release.tag_name }} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Release tag must be in the format v{major}.{minor}.{patch} (e.g., v1.0.0)"
+            exit 1
+          fi
+
   build-and-push:
+    needs: validate-tag
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,10 +44,10 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
-            type=raw,value=${{ inputs.version }}
-            type=semver,pattern=v{{version}},value=${{ inputs.version }}
-            type=semver,pattern=v{{major}}.{{minor}},value=${{ inputs.version }}
-            type=semver,pattern=v{{major}},value=${{ inputs.version }}
+            type=raw,value=${{ github.event.release.tag_name }}
+            type=semver,pattern=v{{version}},value=${{ github.event.release.tag_name }}
+            type=semver,pattern=v{{major}}.{{minor}},value=${{ github.event.release.tag_name }}
+            type=semver,pattern=v{{major}},value=${{ github.event.release.tag_name }}
             type=sha
 
       - name: Build and push Docker image
