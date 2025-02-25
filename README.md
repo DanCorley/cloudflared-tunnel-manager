@@ -57,8 +57,8 @@ services:
 ```
 
 The DNS manager will automatically:
-- Create `myapp.yourdomain.com` hostname on your Cloudflare tunnel
-  - + create a dns record pointing to tunnel
+- Create `hello.**yourdomain**.com` hostname on your Cloudflare tunnel
+  - and create a dns record pointing to tunnel
 - Remove these records when the container stops
 - Update the record if labels change upon container re-creation
 
