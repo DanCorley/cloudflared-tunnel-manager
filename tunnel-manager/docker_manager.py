@@ -66,7 +66,7 @@ class DockerManager:
         try:
             action = event['Action']
             container = self.get_container_by_id(event['id'])
-            
+
             if not container:
                 return
 
@@ -74,9 +74,7 @@ class DockerManager:
             logger.debug(f"Event details: {json.dumps(event)}")
 
             labels = self.get_container_labels(container)
-            if labels:
-                # Set enabled state based on container action
-                labels['enabled'] = str(action == 'start').lower()
+            if labels.get('enabled', False):
                 callback(labels, action)
             else:
                 logger.debug(f"Container {container.name} has no valid Cloudflare labels")
