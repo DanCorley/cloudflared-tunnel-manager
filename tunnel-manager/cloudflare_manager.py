@@ -105,11 +105,17 @@ class CloudflareManager:
     def update_tunnel_config(self, labels: dict, action: str = 'start') -> None:
         """Update tunnel configuration cache based on container labels."""
         try:
+
+            enabled = labels.get('enabled', False)
+            if not enabled:
+                logger.debug("Cannot update tunnel config: not enabled in labels")
+                return False
+
             if not self.tunnel_config_cache:
                 self.get_tunnel_config()
 
+            subdomain = labels.get('subdomain')
             config = self.tunnel_config_cache
-            subdomain = labels['subdomain']
             hostname = f"{subdomain}.{self.domain}"
             logger.info(f"Hostname for {subdomain}: {hostname}")
             
@@ -175,8 +181,13 @@ class CloudflareManager:
     def update_dns_record(self, labels: dict, action: str = 'start'):
         """Update a single DNS record based on container labels."""
         try:
-            subdomain = labels['subdomain']
 
+            enabled = labels.get('enabled', False)
+            if not enabled:
+                logger.debug("Cannot update DNS record: not enabled in labels")
+                return False
+
+            subdomain = labels.get('subdomain')
             # Prepare record data using labels
             record_data = {
                 'comment': 'managed via cloudflared-tunnel-manager',
@@ -203,7 +214,7 @@ class CloudflareManager:
                         )
                     if in_cache:
                         del self.dns_record_cache[subdomain]
-                return
+                return True
 
             # Handle enabled state for DNS
             if in_cloudflare:
@@ -230,6 +241,8 @@ class CloudflareManager:
                 )
                 self.dns_record_cache[subdomain] = new_record
 
+            return True
+
         except Exception as e:
             logger.error(f"Error updating DNS record for {subdomain}: {str(e)}")
             raise
@@ -237,13 +250,19 @@ class CloudflareManager:
     def handle_container_update(self, labels: dict, action: str = 'start'):
         """Handle both DNS and tunnel configuration updates for a container."""
         try:
+            subdomain = labels.get('subdomain')
+            if not labels.get('enabled', False):
+                logger.debug(f"Skipping update for disabled container")
+                return False
+
             # First update DNS record and tunnel config
-            self.update_dns_record(labels, action)
-            self.update_tunnel_config(labels, action)
+            has_dns_update = self.update_dns_record(labels, action)
+            has_tunnel_update = self.update_tunnel_config(labels, action)
             
-            # Then push tunnel configuration
-            self.push_tunnel_config()
+            # Push tunnel config if there were any updates
+            if has_dns_update or has_tunnel_update:
+                self.push_tunnel_config()
 
         except Exception as e:
-            logger.error(f"Error handling container update for {labels.get('subdomain')}: {str(e)}")
+            logger.error(f"Error handling container update for container '{subdomain}': {str(e)}")
             raise

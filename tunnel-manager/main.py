@@ -74,7 +74,6 @@ def main():
                 cf_manager.update_tunnel_config(labels)
 
         # Send the final tunnel configuration update
-        logger.info("Pushing final tunnel configuration")
         cf_manager.push_tunnel_config()
 
     except Exception as e:
