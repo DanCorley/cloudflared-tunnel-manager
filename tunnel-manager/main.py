@@ -69,7 +69,7 @@ def main():
         for container in containers:
             logger.debug(f"Processing existing container: {container.name}")
             labels = docker_manager.get_container_labels(container)
-            if labels:
+            if labels.get('enabled', False):
                 cf_manager.update_dns_record(labels)
                 cf_manager.update_tunnel_config(labels)
 

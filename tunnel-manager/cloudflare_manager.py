@@ -52,7 +52,7 @@ class CloudflareManager:
             logger.error(f"Failed to extract tunnel ID from token: {str(e)}")
             raise
 
-    def get_dns_records(self, search=None):
+    def get_dns_records(self, search: str = None):
         """Get DNS records from Cloudflare.
         
         If search is provided, returns a single matching record.
@@ -102,7 +102,7 @@ class CloudflareManager:
             logger.error(f"Error getting tunnel configuration: {str(e)}")
             raise
 
-    def update_tunnel_config(self, labels: dict) -> None:
+    def update_tunnel_config(self, labels: dict, action: str = 'start') -> None:
         """Update tunnel configuration cache based on container labels."""
         try:
             if not self.tunnel_config_cache:
@@ -121,7 +121,7 @@ class CloudflareManager:
             )
 
             # If container is disabled, remove the ingress rule
-            if labels.get('enabled', 'false').lower() != 'true':
+            if not labels.get('enabled', True) or action == 'die':
                 if existing_rule:
                     config.config.ingress.remove(existing_rule)
                     logger.info(f"Removed ingress rule for {hostname}")
@@ -172,7 +172,7 @@ class CloudflareManager:
             logger.error(f"Error pushing tunnel configuration: {str(e)}")
             raise
 
-    def update_dns_record(self, labels):
+    def update_dns_record(self, labels: dict, action: str = 'start'):
         """Update a single DNS record based on container labels."""
         try:
             subdomain = labels['subdomain']
@@ -192,7 +192,7 @@ class CloudflareManager:
             in_cloudflare = current_record is not None
             in_cache = subdomain in self.dns_record_cache
 
-            if labels.get('enabled', 'false').lower() != 'true':
+            if not labels.get('enabled', True) or action == 'die':
                 # Handle disabled state - delete if exists
                 if in_cache or in_cloudflare:
                     logger.info(f"Deleting DNS record for {subdomain}.{self.domain}")
@@ -230,19 +230,16 @@ class CloudflareManager:
                 )
                 self.dns_record_cache[subdomain] = new_record
 
-            # Then update tunnel configuration
-            self.update_tunnel_config(labels)
-
         except Exception as e:
             logger.error(f"Error updating DNS record for {subdomain}: {str(e)}")
             raise
 
-    def handle_container_update(self, labels):
+    def handle_container_update(self, labels: dict, action: str = 'start'):
         """Handle both DNS and tunnel configuration updates for a container."""
         try:
             # First update DNS record and tunnel config
-            self.update_dns_record(labels)
-            self.update_tunnel_config(labels)
+            self.update_dns_record(labels, action)
+            self.update_tunnel_config(labels, action)
             
             # Then push tunnel configuration
             self.push_tunnel_config()
