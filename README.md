@@ -16,7 +16,9 @@ A Docker-based solution that automatically manages Cloudflare DNS records and tu
 - Docker and Docker Compose
 - A Cloudflare account with:
   - A registered domain
-  - API token with DNS edit permissions
+  - API token with edit / view permissions:
+    - Account -> Cloudflare Tunnel
+    - Zone -> DNS
   - Cloudflare Tunnel created
   - Zero Trust access
 
@@ -34,10 +36,32 @@ TUNNEL_TOKEN=your-tunnel-token
 CF_API_TOKEN=your-api-token
 CF_ACCOUNT_ID=your-account-id
 CF_ZONE_ID=your-zone-id
-
-# Optional: GitHub configuration for using published image
-GITHUB_REPOSITORY=your-username/cloudflared
 ```
+
+## Usage
+
+### Container Labels
+
+Add these labels to any container you want to expose through Cloudflare:
+
+```yaml
+services:
+  nginx:
+    image: nginx:latest
+    ports:
+      - 80:80
+    labels:
+      - "cloudflare.enabled=true"         # Required: Enable Cloudflare integration
+      - "cloudflare.subdomain=hello"      # Creates hello.yourdomain.com
+      - "cloudflare.port=80"              # Optional: Enables a specific port
+```
+
+The DNS manager will automatically:
+- Create `myapp.yourdomain.com` hostname on your Cloudflare tunnel
+  - + create a dns record pointing to tunnel
+- Remove these records when the container stops
+- Update the record if labels change upon container re-creation
+
 
 ## Installation
 
@@ -45,18 +69,47 @@ GITHUB_REPOSITORY=your-username/cloudflared
 
 The easiest way to get started is using our pre-built image from GitHub Container Registry:
 
-1. Clone this repository:
+1. Create a docker-compose file alongside cloudflared:
    ```bash
-   git clone https://github.com/yourusername/cloudflared.git
-   cd cloudflared
+   services:
+   cloudflared:
+      image: cloudflare/cloudflared:latest
+      container_name: cloudflared
+      restart: unless-stopped
+      command: tunnel run
+      volumes:
+         - ./cloudflared:/etc/cloudflared
+      environment:
+         - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+
+   dns-manager:
+      # image: ghcr.io/DanCorley/dns-manager:latest
+      build:
+         context: ./dns-manager
+         dockerfile: Dockerfile
+      container_name: dns-manager
+      restart: unless-stopped
+      volumes:
+         - /var/run/docker.sock:/var/run/docker.sock:ro
+         - ./logs:/app/logs
+      environment:
+         - CF_API_TOKEN=${CF_API_TOKEN}
+         - CF_ACCOUNT_ID=${CF_ACCOUNT_ID}
+         - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+         - CF_ZONE_ID=${CF_ZONE_ID}
+         - DOMAIN=${DOMAIN}
+         - HOST_IP=${HOST_IP|-localhost}
    ```
 
 2. Set up your environment variables in `.env`
 
-3. Start the services:
+3. Set labels like `cloudflare.enabled=true` on others + restart containers
+
+4. Start the services with cloudflared-tunnel-manager:
    ```bash
    docker compose up -d
    ```
+5. Restart other containers if labels not set.
 
 ### Building Locally
 
@@ -98,23 +151,18 @@ If you prefer to build the image locally:
 └── logs/                     # Log directory
 ```
 
-### Publishing New Versions
 
-To publish a new version of the DNS manager:
+### Best Practices
 
-1. Create and push a new tag:
-   ```bash
-   git tag -a v1.0.0 -m "Release v1.0.0"
-   git push origin v1.0.0
-   ```
+1. **Naming**
+   - Use descriptive subdomains that reflect the service
+   - Avoid using special characters in subdomains
+   - Keep subdomains short and memorable
 
-2. The GitHub Action will automatically:
-   - Build the Docker image
-   - Tag it with the version number
-   - Push it to GitHub Container Registry
+2. **Security**
+   - Only enable Cloudflare integration for services that need external access
+   - Consider using separate domains for internal and external services
 
-The image will be available at:
-```
-ghcr.io/your-username/cloudflared/dns-manager:v1.0.0
-ghcr.io/your-username/cloudflared/dns-manager:latest
-``` 
+3. **Organization**
+   - Group related services under similar subdomain patterns
+   - Use consistent naming conventions across your infrastructure
