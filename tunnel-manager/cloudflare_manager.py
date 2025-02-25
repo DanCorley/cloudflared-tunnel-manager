@@ -176,7 +176,7 @@ class CloudflareManager:
         """Update a single DNS record based on container labels."""
         try:
             subdomain = labels['subdomain']
-            active = labels.get('enabled', 'true').lower() == 'true'
+            active = labels.get('enabled', 'false').lower() == 'true'
 
             # Prepare record data using labels
             record_data = {
