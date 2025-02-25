@@ -13,7 +13,7 @@ class DockerManager:
         """Extract Cloudflare-related labels from container."""
         try:
             labels = container.labels
-            
+
             # Get all labels prefixed with cloudflare
             cloudflare_labels = {
                 key.replace('cloudflare.', ''): value
@@ -27,7 +27,10 @@ class DockerManager:
             # Ensure required labels exist
             if not cloudflare_labels.get('subdomain'):
                 cloudflare_labels['subdomain'] = container.name
-                
+
+            if not cloudflare_labels.get('port'):
+                cloudflare_labels['port'] = list(container.ports.values())[-1][0].get('HostPort')
+
             logger.debug(f"Found Cloudflare labels for container {container.name}: {cloudflare_labels}")
             return cloudflare_labels
 

@@ -25,6 +25,7 @@ services:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
       - CF_ZONE_ID=${CF_ZONE_ID}
       - DOMAIN=${DOMAIN}
-      - HOST_IP=${HOST_IP}
+      - HOST_IP=${HOST_IP:-localhost}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     depends_on:
       - cloudflared

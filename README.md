@@ -95,7 +95,7 @@ The easiest way to get started is using our pre-built image from GitHub Containe
          - TUNNEL_TOKEN=${TUNNEL_TOKEN}
          - CF_ZONE_ID=${CF_ZONE_ID}
          - DOMAIN=${DOMAIN}
-         - HOST_IP=${HOST_IP|-localhost}
+         - HOST_IP=${HOST_IP:-localhost}
    ```
 
 2. Set up your environment variables in `.env`
