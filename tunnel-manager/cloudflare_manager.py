@@ -176,7 +176,6 @@ class CloudflareManager:
         """Update a single DNS record based on container labels."""
         try:
             subdomain = labels['subdomain']
-            active = labels.get('enabled', 'false').lower() == 'true'
 
             # Prepare record data using labels
             record_data = {
@@ -193,7 +192,7 @@ class CloudflareManager:
             in_cloudflare = current_record is not None
             in_cache = subdomain in self.dns_record_cache
 
-            if not active:
+            if labels.get('enabled', 'false').lower() != 'true':
                 # Handle disabled state - delete if exists
                 if in_cache or in_cloudflare:
                     logger.info(f"Deleting DNS record for {subdomain}.{self.domain}")
