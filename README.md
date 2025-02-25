@@ -83,10 +83,7 @@ The easiest way to get started is using our pre-built image from GitHub Containe
          - TUNNEL_TOKEN=${TUNNEL_TOKEN}
 
    tunnel-manager:
-      # image: ghcr.io/dancorley/cloudflared-tunnel-manager:latest
-      build:
-         context: ./cloudflared-tunnel-manager
-         dockerfile: Dockerfile
+      image: ghcr.io/dancorley/cloudflared-tunnel-manager:latest
       container_name: cloudflared-tunnel-manager
       restart: unless-stopped
       volumes:
