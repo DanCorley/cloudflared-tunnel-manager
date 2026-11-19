@@ -126,7 +126,7 @@ class DockerManager:
         except Exception as e:
             logger.error(f"Error handling container event: {str(e)}")
 
-    def watch_events(self, callback: Callable, timeout: float = 60.0, since: int = None) -> int:
+    def watch_events(self, callback: Callable, timeout: float = 300.0, since: int = None) -> int:
         """Consume start/die events for up to `timeout` seconds, then return.
 
         Returns the timestamp to pass as `since` next time, so events that

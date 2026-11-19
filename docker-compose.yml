@@ -27,5 +27,6 @@ services:
       - DOMAIN=${DOMAIN}
       - HOST_IP=${HOST_IP:-localhost}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RECONCILE_INTERVAL=${RECONCILE_INTERVAL:-300}
     depends_on:
       - cloudflared

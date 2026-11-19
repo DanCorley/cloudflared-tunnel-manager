@@ -8,6 +8,11 @@ from docker_manager import DockerManager
 LOG_DIR = '/app/logs'
 LOG_FILE = f'{LOG_DIR}/cloudflared-tunnel-manager.log'
 
+# How often to run a full reconcile. The event path handles normal changes in
+# milliseconds; this is only the repair path for failed writes, external edits,
+# and downtime, so it does not need to be frequent.
+RECONCILE_INTERVAL = max(10, int(os.getenv('RECONCILE_INTERVAL') or '300'))
+
 # Floor between reconcile passes, so a stream that closes early cannot turn the
 # loop into a hot loop against the Cloudflare API.
 MIN_RECONCILE_INTERVAL = 5
@@ -74,7 +79,9 @@ def main():
     while True:
         started = monotonic()
         cursor = docker_manager.watch_events(
-            cf_manager.handle_container_update, since=cursor
+            cf_manager.handle_container_update,
+            timeout=RECONCILE_INTERVAL,
+            since=cursor,
         )
         # Observable signal that the stream really does return on schedule.
         logger.debug("Event stream returned, running reconcile")

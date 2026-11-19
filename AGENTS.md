@@ -26,13 +26,13 @@ Two paths, deliberately redundant:
    `CloudflareManager.handle_container_update`, which applies the DNS and
    ingress change and pushes the tunnel config only if the ingress cache
    actually changed.
-2. **Reconcile path.** `watch_events` deliberately returns every 60 seconds.
-   `main` then calls `reconcile`, which rebuilds desired state from the running
-   containers, re-reads Cloudflare state, and applies the minimal diff. Each
-   stream is opened with `since` set to the previous window's deadline, so
-   events that land between streams are replayed rather than missed.
+2. **Reconcile path.** `watch_events` returns every `RECONCILE_INTERVAL` seconds
+   (default 300). `main` then calls `reconcile`, which rebuilds desired state
+   from the running containers, re-reads Cloudflare state, and applies the
+   minimal diff. Each stream is opened with `since` set to the previous window's
+   deadline, so events that land between streams are replayed rather than missed.
 
-The reconcile pass is what repairs state after missed events, failed API calls,
+The reconcile pass is what repairs state after failed API calls, external edits,
 or downtime. The event path is an optimisation for latency, not the source of
 truth. Do not turn the event path back into the only mechanism.
 
@@ -40,8 +40,9 @@ truth. Do not turn the event path back into the only mechanism.
 
 This is I/O-bound. "Performance" here means API round trips, not CPU.
 
-- **Idle baseline:** two reads per 60 seconds (`dns.records.list`,
-  `tunnels.configurations.get`). Zero writes.
+- **Idle baseline:** two reads per reconcile interval (`dns.records.list`,
+  `tunnels.configurations.get`). At the default 300s that is 576 reads/day.
+  Zero writes.
 - **Per event:** zero or one DNS write, plus one tunnel config push only when
   the ingress cache changed.
 - **Startup:** one reconcile, so roughly `2 + N` calls for N labelled
