@@ -28,7 +28,9 @@ Two paths, deliberately redundant:
    actually changed.
 2. **Reconcile path.** `watch_events` deliberately returns every 60 seconds.
    `main` then calls `reconcile`, which rebuilds desired state from the running
-   containers, re-reads Cloudflare state, and applies the minimal diff.
+   containers, re-reads Cloudflare state, and applies the minimal diff. Each
+   stream is opened with `since` set to the previous window's deadline, so
+   events that land between streams are replayed rather than missed.
 
 The reconcile pass is what repairs state after missed events, failed API calls,
 or downtime. The event path is an optimisation for latency, not the source of
@@ -93,6 +95,20 @@ replacing it with something equally safe.
 - **`accepted_methods.py` is dead scratch code.** It is excluded from the image
   by `.dockerignore`. Read it for API examples if useful; do not wire it in.
 
+## Dependencies
+
+`requirements.txt` lists direct dependencies only. `requirements.lock` is the
+fully pinned, cross-platform resolution and is what the image installs.
+
+Regenerate it after any change to `requirements.txt`:
+
+```bash
+uv pip compile requirements.txt --python-version 3.11 --universal -o requirements.lock
+```
+
+The base image is pinned by digest in the `Dockerfile`. Bumping it is a
+deliberate edit; do not drop the digest back to a bare tag.
+
 ## Verifying changes
 
 - `python3 -m py_compile tunnel-manager/*.py` catches syntax errors only.
@@ -123,12 +139,7 @@ replacing it with something equally safe.
 
 ## Open items
 
-These are known and deliberately not fixed:
-
-- The event stream has no `since` cursor. Reconcile covers the gap, so a missed
-  event costs at most one reconcile interval.
-- `record.name.endswith(self.domain)` in `get_dns_records` is redundant: the
-  query is already scoped to `zone_id`.
 - A burst of container starts still pushes the tunnel config once per event.
-  Debouncing would need either a thread or a signal-safe flush and is not worth
-  it at homelab scale.
+  Debouncing needs either a thread or a signal-safe flush, and the whole cost is
+  a one-off ~200 ms per container during `docker compose up`. Not worth it at
+  this scale.

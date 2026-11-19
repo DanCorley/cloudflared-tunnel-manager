@@ -70,9 +70,12 @@ def main():
     # Watch events for a while, then reconcile. The periodic reconcile is what
     # repairs state after missed events or failed API calls.
     logger.info("Starting container event monitoring")
+    cursor = None
     while True:
         started = monotonic()
-        docker_manager.watch_events(cf_manager.handle_container_update)
+        cursor = docker_manager.watch_events(
+            cf_manager.handle_container_update, since=cursor
+        )
         # Observable signal that the stream really does return on schedule.
         logger.debug("Event stream returned, running reconcile")
         reconcile(cf_manager, docker_manager)

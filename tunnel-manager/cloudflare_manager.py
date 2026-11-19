@@ -66,10 +66,10 @@ class CloudflareManager:
                 type='CNAME'
             )
 
+            # The query is scoped to zone_id, so every record is in this zone.
             self.dns_record_cache = {
                 record.name.replace(f'.{self.domain}', ''): record
                 for record in records
-                if record.name.endswith(self.domain)
             }
             logger.debug(f"Cached {len(self.dns_record_cache)} DNS records")
             return self.dns_record_cache

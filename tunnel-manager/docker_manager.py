@@ -126,16 +126,21 @@ class DockerManager:
         except Exception as e:
             logger.error(f"Error handling container event: {str(e)}")
 
-    def watch_events(self, callback: Callable, timeout: float = 60.0):
+    def watch_events(self, callback: Callable, timeout: float = 60.0, since: int = None) -> int:
         """Consume start/die events for up to `timeout` seconds, then return.
 
-        Returning periodically lets the caller run a full reconcile, which also
-        covers events missed while the stream was reconnecting.
+        Returns the timestamp to pass as `since` next time, so events that
+        arrive between one stream ending and the next starting are replayed
+        rather than missed. Replays are safe because updates are idempotent.
+
+        Returning periodically also lets the caller run a full reconcile.
         """
+        until = int(time.time() + timeout)
         try:
             for event in self.client.events(
                 decode=True,
-                until=int(time.time() + timeout),
+                since=since,
+                until=until,
                 filters={'type': ['container'], 'event': ['start', 'die']},
             ):
                 # Guard in case the daemon ignores the server-side event filter.
@@ -144,3 +149,4 @@ class DockerManager:
         except Exception as e:
             logger.error(f"Error watching container events: {str(e)}")
             raise
+        return until
