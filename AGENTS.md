@@ -83,6 +83,10 @@ replacing it with something equally safe.
   with aliases, or verify the field actually took the value.
 - **`insert(-1)` before the catch-all assumes a catch-all rule exists.** That
   assumption predates this code; it is not handled.
+- **`docker` 6.x is incompatible with `urllib3` 2.x.** A fresh build resolves
+  `urllib3` 2.6+, which breaks the `http+docker` connection scheme with
+  "Not supported URL scheme http+docker". Keep `docker>=7`. Downgrading it
+  reintroduces the failure.
 - **No optimistic concurrency.** The tunnel config update accepts only
   `account_id` and `config` in SDK 4.0.0. There is no version or ETag to pass.
   The `version` field on the response is a read-only hint.
