@@ -61,6 +61,14 @@ The DNS manager will automatically:
   - and create a dns record pointing to tunnel
 - Remove these records when the container stops
 - Update the record if labels change upon container re-creation
+- Re-reconcile every 60 seconds, cleaning up anything left behind while the
+  manager was down
+
+> **Upgrading:** DNS records carry an ownership comment, but tunnel ingress
+> rules do not. Any rule whose hostname is under `DOMAIN` and whose service is
+> `http://${HOST_IP}:<port>` is treated as managed and will be pruned when no
+> running container claims it. Back up your tunnel configuration first if you
+> hand-manage rules that match that pattern.
 
 
 ## Installation

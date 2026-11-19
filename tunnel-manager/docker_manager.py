@@ -1,9 +1,9 @@
+import time
 from typing import Callable
 import docker
 import logging
-import json
 
-logger = logging.getLogger('dns-manager')
+logger = logging.getLogger(__name__)
 
 class DockerManager:
     def __init__(self):
@@ -22,7 +22,7 @@ class DockerManager:
             if isinstance(container_or_event, dict):
                 if 'Actor' not in container_or_event:
                     logger.error("Invalid event data: missing Actor field")
-                    return None
+                    return {}
                     
                 labels = container_or_event['Actor'].get('Attributes', {})
                 container_name = labels.get('name', 'unknown')
@@ -59,7 +59,7 @@ class DockerManager:
 
         except Exception as e:
             logger.error(f"Error getting labels for container: {str(e)}")
-            return None
+            return {}
 
     def get_running_containers(self):
         """Get list of all running containers."""
@@ -68,6 +68,21 @@ class DockerManager:
         except Exception as e:
             logger.error(f"Error getting running containers: {str(e)}")
             raise
+
+    def get_desired_state(self) -> dict:
+        """Map subdomain -> labels for every running container with cloudflare.enabled=true."""
+        desired = {}
+        for container in self.get_running_containers():
+            labels = self.get_container_labels(container)
+            if labels.get('enabled') and labels.get('subdomain'):
+                subdomain = labels['subdomain']
+                if subdomain in desired:
+                    logger.warning(
+                        f"Subdomain '{subdomain}' is claimed by more than one container; "
+                        f"{container.name} wins"
+                    )
+                desired[subdomain] = labels
+        return desired
 
     def get_container_by_id(self, container_id: str) -> docker.models.containers.Container:
         """Get container by ID."""
@@ -101,7 +116,7 @@ class DockerManager:
                 return
 
             logger.info(f"Processing {action} event for container: {container_name}")
-            logger.debug(f"Event details: {json.dumps(event)}")
+            logger.debug("Event details: %s", event)
 
             if labels.get('enabled', False):
                 callback(labels, action)
@@ -111,11 +126,20 @@ class DockerManager:
         except Exception as e:
             logger.error(f"Error handling container event: {str(e)}")
 
-    def watch_events(self, callback: Callable):
-        """Watch for container events and call callback when they occur."""
+    def watch_events(self, callback: Callable, timeout: float = 60.0):
+        """Consume start/die events for up to `timeout` seconds, then return.
+
+        Returning periodically lets the caller run a full reconcile, which also
+        covers events missed while the stream was reconnecting.
+        """
         try:
-            for event in self.client.events(decode=True, filters={'Type': 'container'}):
-                if event['Action'] in ['start', 'die']:
+            for event in self.client.events(
+                decode=True,
+                until=int(time.time() + timeout),
+                filters={'type': ['container'], 'event': ['start', 'die']},
+            ):
+                # Guard in case the daemon ignores the server-side event filter.
+                if event.get('Action') in ('start', 'die'):
                     self.handle_container_event(event, callback)
         except Exception as e:
             logger.error(f"Error watching container events: {str(e)}")
