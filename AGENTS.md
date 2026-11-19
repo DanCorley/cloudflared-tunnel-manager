@@ -93,8 +93,10 @@ replacing it with something equally safe.
 
 - `python3 -m py_compile tunnel-manager/*.py` catches syntax errors only.
 - `python3 tunnel-manager/test_reconcile.py` exercises `reconcile` against fake
-  clients. It needs the `cloudflare` package, so run it inside the image or a
-  local venv. It makes no network calls.
+  clients. It needs the `cloudflare` package, so run it in a local venv, or mount
+  it into the built image since `.dockerignore` keeps it out of the image:
+  `docker run --rm -v "$PWD/tunnel-manager:/mnt:ro" cloudflared-tunnel-manager:pr python /mnt/test_reconcile.py`.
+  It makes no network calls.
 - Behaviour changes that the self-check does not cover need a live check, which
   means touching a real Cloudflare account. Ask before doing that.
 
