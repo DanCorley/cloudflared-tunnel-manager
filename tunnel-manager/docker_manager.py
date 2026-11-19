@@ -52,7 +52,15 @@ class DockerManager:
                         # For events, we can't get port info, use default
                         cloudflare_labels['port'] = '80'
                     elif any(container_or_event.ports.values()):
-                        cloudflare_labels['port'] = list(container_or_event.ports.values())[-1][0].get('HostPort')
+                        published = [p for p in container_or_event.ports.values() if p]
+                        chosen = published[-1][0].get('HostPort')
+                        if len(published) > 1:
+                            logger.warning(
+                                f"Container {container_name} publishes "
+                                f"{len(published)} ports and has no cloudflare.port "
+                                f"label; using {chosen}"
+                            )
+                        cloudflare_labels['port'] = chosen
 
             logger.debug(f"Found Cloudflare labels for container {container_name}: {cloudflare_labels}")
             return cloudflare_labels

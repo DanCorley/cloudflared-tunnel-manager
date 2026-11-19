@@ -1,9 +1,12 @@
-"""Offline self-check for CloudflareManager.
+"""Offline self-check for the reconcile logic and label parsing.
 
 Run from tunnel-manager/:  python3 test_reconcile.py
 
-Uses a fake API client: no network calls, no Cloudflare state is touched.
+Uses fake API clients and fake containers: no network calls, no Cloudflare
+state is touched, and no Docker daemon is needed.
 """
+import logging
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 from cloudflare.types.zero_trust.tunnels.configuration_get_response import (
@@ -11,6 +14,7 @@ from cloudflare.types.zero_trust.tunnels.configuration_get_response import (
     ConfigIngressOriginRequest,
 )
 from cloudflare_manager import CloudflareManager, MANAGED_COMMENTS
+from docker_manager import DockerManager
 
 DOMAIN = 'example.com'
 HOST_IP = '10.0.0.5'
@@ -59,12 +63,14 @@ class FakeRecords:
 
 
 class FakeConfigurations:
-    def __init__(self, ingress):
+    def __init__(self, ingress, source='cloudflare'):
         self.ingress = ingress
+        self.source = source
         self.pushes = 0
 
     def get(self, **kwargs):
         return SimpleNamespace(
+            source=self.source,
             config=SimpleNamespace(
                 ingress=list(self.ingress), origin_request=None, warp_routing=None
             )
@@ -76,7 +82,7 @@ class FakeConfigurations:
         return SimpleNamespace(config=config)
 
 
-def build(ingress=None, records=None):
+def build(ingress=None, records=None, source='cloudflare'):
     """Construct a manager without __init__ so no real client is created."""
     manager = CloudflareManager.__new__(CloudflareManager)
     manager.domain = DOMAIN
@@ -89,10 +95,13 @@ def build(ingress=None, records=None):
     # Tests exercise steady-state behaviour; the first-pass prune guard has its
     # own test.
     manager._has_reconciled = True
+    manager._warned_local_source = False
     manager.cf = SimpleNamespace(
         dns=SimpleNamespace(records=FakeRecords()),
         zero_trust=SimpleNamespace(
-            tunnels=SimpleNamespace(configurations=FakeConfigurations(ingress or []))
+            tunnels=SimpleNamespace(
+                configurations=FakeConfigurations(ingress or [], source=source)
+            )
         ),
     )
     manager.cf.dns.records.records.extend(records or [])
@@ -209,6 +218,94 @@ def test_die_removes_dns_and_ingress():
     assert hosts(m) == [''], hosts(m)
     assert [r.name for r in m.cf.dns.records.deleted] == ['app.example.com']
     assert m.cf.zero_trust.tunnels.configurations.pushes == 1
+
+
+class FakeContainer:
+    def __init__(self, name, labels, ports=None):
+        self.name = name
+        self.labels = labels
+        self.ports = ports or {}
+
+
+class _Capture(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.messages = []
+
+    def emit(self, record):
+        self.messages.append(record.getMessage())
+
+
+@contextmanager
+def capture_warnings(logger_name):
+    handler = _Capture()
+    target = logging.getLogger(logger_name)
+    target.addHandler(handler)
+    try:
+        yield handler.messages
+    finally:
+        target.removeHandler(handler)
+
+
+def labels_for(container_or_event):
+    return DockerManager.__new__(DockerManager).get_container_labels(container_or_event)
+
+
+def test_labels_use_explicit_port():
+    labels = labels_for(FakeContainer('web', {
+        'cloudflare.enabled': 'true',
+        'cloudflare.subdomain': 'app',
+        'cloudflare.port': '8080',
+    }))
+    assert labels == {'enabled': True, 'subdomain': 'app', 'port': '8080'}
+
+
+def test_labels_default_subdomain_and_single_port():
+    labels = labels_for(FakeContainer(
+        'web', {'cloudflare.enabled': 'true'},
+        {'80/tcp': [{'HostPort': '8080'}]},
+    ))
+    assert labels == {'enabled': True, 'subdomain': 'web', 'port': '8080'}
+
+
+def test_labels_warn_on_multiple_published_ports():
+    container = FakeContainer(
+        'web', {'cloudflare.enabled': 'true'},
+        {'80/tcp': [{'HostPort': '8080'}], '443/tcp': [{'HostPort': '8443'}]},
+    )
+    with capture_warnings('docker_manager') as messages:
+        labels = labels_for(container)
+    assert labels['port'] == '8443'
+    assert len(messages) == 1 and 'cloudflare.port' in messages[0], messages
+
+
+def test_labels_disabled_container():
+    assert labels_for(FakeContainer('db', {'cloudflare.enabled': 'false'})) == {
+        'enabled': False
+    }
+
+
+def test_labels_from_die_event():
+    labels = labels_for({'Actor': {'Attributes': {
+        'name': 'web',
+        'cloudflare.enabled': 'true',
+        'cloudflare.subdomain': 'app',
+    }}})
+    assert labels == {'enabled': True, 'subdomain': 'app', 'port': '80'}
+
+
+def test_labels_invalid_event_returns_empty_dict():
+    with capture_warnings('docker_manager'):
+        assert labels_for({}) == {}
+
+
+def test_warns_once_for_local_tunnel_config():
+    m = build(source='local')
+    with capture_warnings('cloudflare_manager') as messages:
+        m.get_tunnel_config()
+        m.get_tunnel_config()
+    assert len(messages) == 1, messages
+    assert 'local' in messages[0]
 
 
 if __name__ == '__main__':

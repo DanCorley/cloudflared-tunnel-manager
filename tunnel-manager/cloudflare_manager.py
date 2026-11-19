@@ -29,6 +29,7 @@ class CloudflareManager:
         self.tunnel_config_cache = None
         self.host_ip = host_ip
         self._has_reconciled = False
+        self._warned_local_source = False
 
         # Extract tunnel ID and initialize client
         self.tunnel_id = self._get_tunnel_id_from_token()
@@ -86,6 +87,16 @@ class CloudflareManager:
                 tunnel_id=self.tunnel_id
             )
             self.tunnel_config_cache = config
+
+            # A locally-managed tunnel reads ingress from a YAML file on the
+            # origin, so writes here are ignored. Say so once.
+            if config.source == 'local' and not self._warned_local_source:
+                self._warned_local_source = True
+                logger.warning(
+                    "Tunnel config source is 'local': ingress is managed by a YAML "
+                    "file on the origin, so changes made here will not take effect"
+                )
+
             logger.debug("Successfully cached tunnel configuration")
             return config
         except Exception as e:

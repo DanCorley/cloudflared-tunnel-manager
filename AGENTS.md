@@ -86,6 +86,9 @@ replacing it with something equally safe.
   with aliases, or verify the field actually took the value.
 - **`insert(-1)` before the catch-all assumes a catch-all rule exists.** That
   assumption predates this code; it is not handled.
+- **A locally-managed tunnel ignores remote ingress writes.** When
+  `config.source` is `local`, cloudflared reads its ingress from a YAML file on
+  the origin. `get_tunnel_config` warns once; do not treat that as a bug.
 - **`docker` 6.x is incompatible with `urllib3` 2.x.** A fresh build resolves
   `urllib3` 2.6+, which breaks the `http+docker` connection scheme with
   "Not supported URL scheme http+docker". Keep `docker>=7`. Downgrading it
