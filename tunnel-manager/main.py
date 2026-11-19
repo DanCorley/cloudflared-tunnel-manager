@@ -1,30 +1,46 @@
 import os
 import logging
-from time import sleep
+from logging.handlers import RotatingFileHandler
+from time import monotonic, sleep
 from cloudflare_manager import CloudflareManager
 from docker_manager import DockerManager
 
-# Configure dynamic logging based on environment variable
+LOG_DIR = '/app/logs'
+LOG_FILE = f'{LOG_DIR}/cloudflared-tunnel-manager.log'
+
+# How often to run a full reconcile. The event path handles normal changes in
+# milliseconds; this is only the repair path for failed writes, external edits,
+# and downtime, so it does not need to be frequent.
+RECONCILE_INTERVAL = max(10, int(os.getenv('RECONCILE_INTERVAL') or '300'))
+
+# Floor between reconcile passes, so a stream that closes early cannot turn the
+# loop into a hot loop against the Cloudflare API.
+MIN_RECONCILE_INTERVAL = 5
+
+# Configure logging once, on the root logger, so every module reports to both
+# the console and the rotated file exactly once.
+os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper()),
     format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.StreamHandler(),
+        RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3),
+    ],
 )
-logger = logging.getLogger('cloudflared-tunnel-manager')
+logger = logging.getLogger(__name__)
 
-# Ensure logs directory exists
-os.makedirs('/app/logs', exist_ok=True)
 
-# Add file handler with rotation
-log_file = '/app/logs/cloudflared-tunnel-manager.log'
-log_handler = logging.FileHandler(log_file)
-log_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
-logger.addHandler(log_handler)
+def reconcile(cf_manager: CloudflareManager, docker_manager: DockerManager) -> bool:
+    """Re-read Docker state and converge Cloudflare to it."""
+    try:
+        return cf_manager.reconcile(docker_manager.get_desired_state())
+    except Exception as e:
+        # Keep the event loop alive; the next tick retries.
+        logger.error(f"Reconcile failed: {str(e)}")
+        return False
 
-# Add console handler for container logs
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
-logger.addHandler(console_handler)
 
 def main():
     # Get environment variables
@@ -54,35 +70,25 @@ def main():
     docker_manager = DockerManager()
 
     logger.info("Starting DNS Manager...")
-    
-    # Initial setup - cache DNS records and process existing containers
-    try:
-        # First get all existing DNS records and tunnel config
-        cf_manager.get_dns_records()
-        cf_manager.get_tunnel_config()
-        
-        # Process existing containers
-        containers = docker_manager.get_running_containers()
-        logger.info(f"Found {len(containers)} running containers")
+    reconcile(cf_manager, docker_manager)
 
-        # Process DNS records and cache tunnel config updates
-        for container in containers:
-            logger.debug(f"Processing existing container: {container.name}")
-            labels = docker_manager.get_container_labels(container)
-            if labels.get('enabled', False):
-                cf_manager.update_dns_record(labels)
-                cf_manager.update_tunnel_config(labels)
-
-        # Send the final tunnel configuration update
-        cf_manager.push_tunnel_config()
-
-    except Exception as e:
-        logger.error(f"Error during initial setup: {str(e)}")
-        raise
-
-    # Watch for container events
+    # Watch events for a while, then reconcile. The periodic reconcile is what
+    # repairs state after missed events or failed API calls.
     logger.info("Starting container event monitoring")
-    docker_manager.watch_events(cf_manager.handle_container_update)
+    cursor = None
+    while True:
+        started = monotonic()
+        cursor = docker_manager.watch_events(
+            cf_manager.handle_container_update,
+            timeout=RECONCILE_INTERVAL,
+            since=cursor,
+        )
+        # Observable signal that the stream really does return on schedule.
+        logger.debug("Event stream returned, running reconcile")
+        reconcile(cf_manager, docker_manager)
+        elapsed = monotonic() - started
+        if elapsed < MIN_RECONCILE_INTERVAL:
+            sleep(MIN_RECONCILE_INTERVAL - elapsed)
 
 
 if __name__ == '__main__':
